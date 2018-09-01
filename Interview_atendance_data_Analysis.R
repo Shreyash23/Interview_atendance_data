@@ -2,6 +2,9 @@ library(readr)
 library(lubridate)
 library(corrplot)
 library(caret)
+library(keras)
+library(recipes)
+install_keras()
 Interview_Attendance_Data <- read_csv("C:/Users/shrey/Desktop/Interview_atendance_data/Interview_Attendance_Data.csv")
 #replacing spaces with "_" in the column names
 names(Interview_Attendance_Data) <- gsub(" ", "_", names(Interview_Attendance_Data))
@@ -300,20 +303,95 @@ glm_Model <- train(Observed_Attendance~.,Train_data,method="glm",metric="ROC",tr
 
 svmLinear_Model <- train(Observed_Attendance~.,Train_data,method="svmLinear",metric="ROC",trControl=ctrl)
 
-adaboost_Model <- train(Observed_Attendance~.,Train_data,method="adaboost",metric="ROC",trControl=ctrl)
-
 nnet_Model <- train(Observed_Attendance~.,Train_data,method="nnet",metric="ROC",trControl=ctrl)
 
 xgbDART_Model <- train(Observed_Attendance~.,Train_data,method="xgbDART",metric="ROC",trControl=ctrl)
 
 svmradial_Model <- train(Observed_Attendance~.,Train_data,method="svmRadial",metric="ROC",trControl=ctrl)
 
+#Validating models
+RF_Model
+glm_Model
+svmLinear_Model
+nnet_Model
+xgbDART_Model
+svmradial_Model
 
+#So far xgb has the highest accuracy among the models created
+#Lets try if ANN makes any difference
+##Need some data cleanup beofre we can use the recipe to bake a new version of the datasets
+names(Train_data) <- gsub("\\/", "", names(Train_data))
+names(Test_data) <- gsub("\\/", "", names(Test_data))
+Train_data$Candidate_Native_location <- factor(Train_data$Candidate_Native_location)
 
+rec_obj <- recipe(Observed_Attendance ~ ., data = Train_data) %>%
+  step_dummy(all_nominal(), -all_outcomes()) %>%
+  step_center(all_predictors(), -all_outcomes()) %>%
+  step_scale(all_predictors(), -all_outcomes()) %>%
+  prep(data = Train_data)
 
+x_train_tbl <- bake(rec_obj, newdata = Train_data) %>% select(-Observed_Attendance)
+x_test_tbl  <- bake(rec_obj, newdata = Test_data) %>% select(-Observed_Attendance)
 
+y_train_vec <- ifelse(pull(Train_data, Observed_Attendance) == "Yes", 1, 0)
+y_test_vec  <- ifelse(pull(Test_data, Observed_Attendance) == "Yes", 1, 0)
 
+#Imlementing Keras Tensorflow to include ANN
+#Building ANN
+model_keras <- keras_model_sequential()
+set.seed(123)
+model <- model_keras %>%
+  layer_dense(units = 256, kernel_initializer = "uniform", activation = "relu",
+              input_shape = ncol(x_train_tbl)) %>%
+  layer_dropout(rate = 0.10) %>%
+  layer_dense(units = 128, kernel_initializer = "uniform", activation = "relu") %>%
+  layer_dropout(rate = 0.10) %>%
+  layer_dense(units = 128, kernel_initializer = "uniform", activation = "relu") %>%
+  layer_dropout(rate = 0.10) %>%
+  layer_dense(units = 64, kernel_initializer = "uniform", activation = "relu") %>%
+  layer_dropout(rate = 0.10) %>%
+  layer_dense(units = 1, kernel_initializer = "uniform", activation = "sigmoid")
+# Compile 
+compile2 <- model_keras %>%
+  compile(optimizer = "adam", loss = "binary_crossentropy", metrics = c("accuracy"))
 
+compile2
+
+kemodel <- fit(object = model,
+               x = as.matrix(x_train_tbl),
+               y = y_train_vec,
+               batch_size = 128,
+               epochs = 50,
+               validation_split = 0.30,
+               shuffle=TRUE)
+
+#Inspite of many attempts tuning the keras ANN, the performance still seems to be poor than the models we had trained earlier.
+#xgboost still gives us the best training accuracy.
+#Lets try the using the models with one-hot encoded and scaled data
+#Baking the dataset again
+Train_data_new <- bake(rec_obj, newdata = Train_data)
+Test_data_new  <- bake(rec_obj, newdata = Test_data)
+
+#BUilding the models
+RF_Model_new <- train(Observed_Attendance~.,Train_data_new,method="rf",metric="accuracy",trControl=ctrl)
+
+glm_Model_new <- train(Observed_Attendance~.,Train_data_new,method="glm",metric="accuracy",trControl=ctrl)
+
+svmLinear_Model_new <- train(Observed_Attendance~.,Train_data_new,method="svmLinear",metric="accuracy",trControl=ctrl)
+
+nnet_Model_new <- train(Observed_Attendance~.,Train_data_new,method="nnet",metric="accuracy",trControl=ctrl)
+
+xgbDART_Model_new <- train(Observed_Attendance~.,Train_data_new,method="xgbDART",metric="accuracy",trControl=ctrl)
+
+svmradial_Model_new <- train(Observed_Attendance~.,Train_data_new,method="svmRadial",metric="accuracy",trControl=ctrl)
+
+#Validating models
+RF_Model_new
+glm_Model_new
+svmLinear_Model_new
+nnet_Model_new
+xgbDART_Model_new
+svmradial_Model_new
 
 
 
