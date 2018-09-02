@@ -110,9 +110,6 @@ str(Interview_Attendance_Data$Interview_Type)
 Interview_Attendance_Data$Interview_Type <- as.factor(Interview_Attendance_Data$Interview_Type)
 table(Interview_Attendance_Data$Interview_Type)
 
-#Taking care of the Name/ID column
-Interview_Attendance_Data$`Name(Cand_ID)` <- NULL
-
 #Taking care of the Gender column
 str(Interview_Attendance_Data$Gender)
 Interview_Attendance_Data$Gender <- as.factor(Interview_Attendance_Data$Gender)
@@ -265,6 +262,11 @@ Interview_Attendance_Data$X27 <- NULL
 #Deleting last row wihch has NA
 Interview_Attendance_Data <- Interview_Attendance_Data[-1234,]
 
+
+#Taking care of the Name/ID column
+Candidate_ID <- Interview_Attendance_Data[is.na(Interview_Attendance_Data$Observed_Attendance),6]
+Interview_Attendance_Data$`Name(Cand_ID)` <- NULL
+
 #Some Additional Data Engineering on Date column
 #Converting the date to seasons might give us more meaningful insights
 #Creating a Seasons Columns
@@ -289,7 +291,7 @@ str(Interview_Attendance_Data)
 #Creating training and testing datasets as per the question
 Train_data <- Interview_Attendance_Data[-which(is.na(Interview_Attendance_Data$Observed_Attendance)),]
 Test_data <- Interview_Attendance_Data[which(is.na(Interview_Attendance_Data$Observed_Attendance)),]
-
+Test_data_old <- Test_data
 ###Lets start building the models
 ctrl <- trainControl(method = "repeatedcv",
                      number = 10,
@@ -370,7 +372,7 @@ kemodel <- fit(object = model,
 #Lets try the using the models with one-hot encoded and scaled data
 #Baking the dataset again
 Train_data_new <- bake(rec_obj, newdata = Train_data)
-Test_data_new  <- bake(rec_obj, newdata = Test_data)
+Test_data_new  <- bake(rec_obj, newdata = Test_data_old)
 
 #BUilding the models
 RF_Model_new <- train(Observed_Attendance~.,Train_data_new,method="rf",metric="accuracy",trControl=ctrl)
@@ -386,12 +388,20 @@ xgbDART_Model_new <- train(Observed_Attendance~.,Train_data_new,method="xgbDART"
 svmradial_Model_new <- train(Observed_Attendance~.,Train_data_new,method="svmRadial",metric="accuracy",trControl=ctrl)
 
 #Validating models
-RF_Model_new
+summary(RF_Model_new)
 glm_Model_new
 svmLinear_Model_new
 nnet_Model_new
 xgbDART_Model_new
 svmradial_Model_new
 
+#As we observe, xgb on the older version of data gives us the best model.
+#Lets predict the target variable
+xgb_pred <- predict(xgbDART_Model,newdata = Test_data_old,type = "raw")
+xgb_prob <- predict(xgbDART_Model,newdata = Test_data_old,type = "prob")
+
+Pred_prob <- cbind(Candidate_ID$`Name(Cand_ID)`,xgb_pred,xgb_prob)
+colnames(Pred_prob) <- c("Candidate ID","Prediction","Probablity_Yes","Probablity_No")
+write.csv(Pred_prob,"Results.csv")
 
 
