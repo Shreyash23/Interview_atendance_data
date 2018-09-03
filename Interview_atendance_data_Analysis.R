@@ -319,7 +319,7 @@ nnet_Model
 xgbDART_Model
 svmradial_Model
 
-#So far xgb has the highest accuracy among the models created
+#So far xgb has the highest training accuracy among the models created
 #Lets try if ANN makes any difference
 ##Need some data cleanup beofre we can use the recipe to bake a new version of the datasets
 names(Train_data) <- gsub("\\/", "", names(Train_data))
@@ -405,7 +405,33 @@ colnames(Pred_prob) <- c("Candidate ID","Prediction","Probablity_Yes","Probablit
 write.csv(Pred_prob,"Results.csv")
 
 barplot(table(Pred_prob$Prediction))
-correlation_matrix <- as.data.frame(correlation_matrix)
-correlation_matrix_correlated <- correlation_matrix[which((correlation_matrix >= 0.5 | correlation_matrix <= -0.50)& correlation_matrix!=1),]
+
+#Lets try balancing the data and then applying models
+#SMOTE used for balancing the data while applying the models in the caret library
+#Lets modify the the code a bit
+ctrl <- trainControl(method = "repeatedcv",
+                     number = 10,
+                     repeats = 5,
+                     classProbs = TRUE)
+ctrl$sampling <- 'smote'
 
 
+RF_Model_smote <- train(Observed_Attendance~.,Train_data,method="rf",metric="accuracy",trControl=ctrl)
+
+glm_Model_smote <- train(Observed_Attendance~.,Train_data,method="glm",metric="accuracy",trControl=ctrl)
+
+svmLinear_Model_smote <- train(Observed_Attendance~.,Train_data,method="svmLinear",metric="accuracy",trControl=ctrl)
+
+nnet_Model_smote <- train(Observed_Attendance~.,Train_data,method="nnet",metric="accuracy",trControl=ctrl)
+
+xgbDART_Model_smote <- train(Observed_Attendance~.,Train_data,method="xgbDART",metric="accuracy",trControl=ctrl)
+
+svmradial_Model_smote <- train(Observed_Attendance~.,Train_data,method="svmRadial",metric="accuracy",trControl=ctrl)
+
+#Validating models
+RF_Model_smote
+glm_Model_smote
+svmLinear_Model_smote
+nnet_Model_smote
+xgbDART_Model_smote
+svmradial_Model_smote
