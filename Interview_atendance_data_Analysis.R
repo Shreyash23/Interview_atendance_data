@@ -404,4 +404,8 @@ Pred_prob <- cbind(Candidate_ID$`Name(Cand_ID)`,xgb_pred,xgb_prob)
 colnames(Pred_prob) <- c("Candidate ID","Prediction","Probablity_Yes","Probablity_No")
 write.csv(Pred_prob,"Results.csv")
 
+barplot(table(Pred_prob$Prediction))
+correlation_matrix <- as.data.frame(correlation_matrix)
+correlation_matrix_correlated <- correlation_matrix[which((correlation_matrix >= 0.5 | correlation_matrix <= -0.50)& correlation_matrix!=1),]
+
 
