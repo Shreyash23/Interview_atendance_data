@@ -143,7 +143,7 @@ Interview_Attendance_Data$Candidate_Native_location <- as.factor(Interview_Atten
 table(Interview_Attendance_Data$Candidate_Native_location)
 Interview_Attendance_Data[which(Interview_Attendance_Data$Candidate_Native_location=='Delhi /NCR'),]$Candidate_Native_location <- 'Delhi'
 Interview_Attendance_Data[which(Interview_Attendance_Data$Candidate_Native_location=='- Cochin-'),]$Candidate_Native_location <- 'Cochin'
-Interview_Attendance_Data$Candidate_Native_location <- factor(Interview_Attendance_Data$Candidate_Native_location)
+#Interview_Attendance_Data$Candidate_Native_location <- factor(Interview_Attendance_Data$Candidate_Native_location)
 table(Interview_Attendance_Data$Candidate_Native_location)
 
 #Taking care of the Have_you_obtained_the_necessary_permission_to_start_at_the_required_time column
@@ -292,6 +292,13 @@ str(Interview_Attendance_Data)
 Train_data <- Interview_Attendance_Data[-which(is.na(Interview_Attendance_Data$Observed_Attendance)),]
 Test_data <- Interview_Attendance_Data[which(is.na(Interview_Attendance_Data$Observed_Attendance)),]
 Test_data_old <- Test_data
+
+#Lets rename the columns which might cause trouble 
+names(Train_data) <- gsub("\\/", "", names(Train_data))
+names(Test_data) <- gsub("\\/", "", names(Test_data))
+names(Test_data_old) <- gsub("\\/", "", names(Test_data_old))
+
+
 ###Lets start building the models
 ctrl <- trainControl(method = "repeatedcv",
                      number = 10,
@@ -321,11 +328,7 @@ svmradial_Model
 
 #So far xgb has the highest training accuracy among the models created
 #Lets try if ANN makes any difference
-##Need some data cleanup beofre we can use the recipe to bake a new version of the datasets
-names(Train_data) <- gsub("\\/", "", names(Train_data))
-names(Test_data) <- gsub("\\/", "", names(Test_data))
-Train_data$Candidate_Native_location <- factor(Train_data$Candidate_Native_location)
-
+#Recipe to make dummy variables and scale them.
 rec_obj <- recipe(Observed_Attendance ~ ., data = Train_data) %>%
   step_dummy(all_nominal(), -all_outcomes()) %>%
   step_center(all_predictors(), -all_outcomes()) %>%
@@ -395,17 +398,6 @@ nnet_Model_new
 xgbDART_Model_new
 svmradial_Model_new
 
-#As we observe, xgb on the older version of data gives us the best model.
-#Lets predict the target variable
-xgb_pred <- predict(xgbDART_Model,newdata = Test_data_old,type = "raw")
-xgb_prob <- predict(xgbDART_Model,newdata = Test_data_old,type = "prob")
-
-Pred_prob <- cbind(Candidate_ID$`Name(Cand_ID)`,xgb_pred,xgb_prob)
-colnames(Pred_prob) <- c("Candidate ID","Prediction","Probablity_Yes","Probablity_No")
-write.csv(Pred_prob,"Results.csv")
-
-barplot(table(Pred_prob$Prediction))
-
 #Lets try balancing the data and then applying models
 #SMOTE used for balancing the data while applying the models in the caret library
 #Lets modify the the code a bit
@@ -424,14 +416,65 @@ svmLinear_Model_smote <- train(Observed_Attendance~.,Train_data,method="svmLinea
 
 nnet_Model_smote <- train(Observed_Attendance~.,Train_data,method="nnet",metric="accuracy",trControl=ctrl)
 
-xgbDART_Model_smote <- train(Observed_Attendance~.,Train_data,method="xgbDART",metric="accuracy",trControl=ctrl)
+xgbDART_Model_smote <- train(Observed_Attendance~.,Train_data,method="xgbDART",metric="Accuracy",trControl=ctrl)
 
-svmradial_Model_smote <- train(Observed_Attendance~.,Train_data,method="svmRadial",metric="accuracy",trControl=ctrl)
+svmradial_Model_smote <- train(Observed_Attendance~.,Train_data,method="svmRadial",metric="Accuracy",trControl=ctrl)
 
 #Validating models
-RF_Model_smote
-glm_Model_smote
-svmLinear_Model_smote
-nnet_Model_smote
-xgbDART_Model_smote
-svmradial_Model_smote
+max(RF_Model_smote$results$Accuracy)
+max(glm_Model_smote$results$Accuracy)
+max(svmLinear_Model_smote$results$Accuracy)
+max(nnet_Model_smote$results$Accuracy)
+max(xgbDART_Model_smote$results$Accuracy)
+max(svmradial_Model_smote$results$Accuracy)
+
+#As we observe, lets compare the accuarcy of all 3 xgb models
+max(xgbDART_Model$results$Accuracy)
+max(xgbDART_Model_new$results$Accuracy)
+max(xgbDART_Model_smote$results$Accuracy)
+
+#Lets predict the target variable using all the 3 models
+xgb_pred <- predict(xgbDART_Model,newdata = Test_data_old,type = "raw")
+xgb_prob <- predict(xgbDART_Model,newdata = Test_data_old,type = "prob")
+
+xgb_pred_new <- predict(xgbDART_Model_new,newdata = Test_data_new,type = "raw")
+xgb_prob_new <- predict(xgbDART_Model_new,newdata = Test_data_new,type = "prob")
+
+xgb_pred_smote <- predict(xgbDART_Model_smote,newdata = Test_data_old,type = "raw")
+xgb_prob_smote <- predict(xgbDART_Model_smote,newdata = Test_data_old,type = "prob")
+
+#FOrmating a table with the concerned columns
+Pred_prob <- cbind(Candidate_ID$`Name(Cand_ID)`,xgb_pred,xgb_prob)
+Pred_prob_new <- cbind(Candidate_ID$`Name(Cand_ID)`,xgb_pred_new,xgb_prob_new)
+Pred_prob_smote <- cbind(Candidate_ID$`Name(Cand_ID)`,xgb_pred_smote,xgb_prob_smote)
+colnames(Pred_prob) <- c("Candidate ID","Prediction","Probablity_Yes","Probablity_No")
+colnames(Pred_prob_smote) <- c("Candidate ID","Prediction","Probablity_Yes","Probablity_No")
+colnames(Pred_prob_new) <- c("Candidate ID","Prediction","Probablity_Yes","Probablity_No")
+
+#Plotting the results of the prediction
+par(mfrow=c(1,3))
+barplot(table(Pred_prob$Prediction),main="Data With NO Tranformations")
+barplot(table(Pred_prob_new$Prediction),main="Scaled and Normalised Data")
+barplot(table(Pred_prob_smote$Prediction),main="SMOTEd Data")
+
+#Lets observe how the each model performs on the SEEN data.
+Pred_train <- predict(xgbDART_Model,newdata = Train_data,type = "raw")
+Pred_train_new <- predict(xgbDART_Model_new,newdata = Train_data_new,type = "raw")
+Pred_train_smote <- predict(xgbDART_Model_smote,newdata = Train_data,type = "raw")
+
+#Analysing the confusion matrix of each model
+confusionMatrix(Pred_train,Train_data$Observed_Attendance)
+confusionMatrix(Pred_train_new,Train_data_new$Observed_Attendance)
+confusionMatrix(Pred_train_smote,Train_data$Observed_Attendance)
+
+#Analysing the aggregated confusion matrix
+confusionMatrix(xgbDART_Model,norm = "none")
+confusionMatrix(xgbDART_Model_new,norm = "none")
+confusionMatrix(xgbDART_Model_smote,norm = "none")
+
+#Here we observe that the model with SMOTEd data is giving us very good sepcificity but poor precision
+#And normalised and no-transformed data  models are almost same with minute differences
+#We have a tie over here
+#However, we see that the model with the normalised data is better at predicting the "No" - which we concerned about
+#Hence, we choose the model which is trained on the normalised dataset
+write.csv(Pred_prob_new,"Results_new.csv")
