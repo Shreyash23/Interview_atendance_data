@@ -475,6 +475,6 @@ confusionMatrix(xgbDART_Model_smote,norm = "none")
 #Here we observe that the model with SMOTEd data is giving us very good sepcificity but poor precision
 #And normalised and no-transformed data  models are almost same with minute differences
 #We have a tie over here
-#However, we see that the model with the normalised data is better at predicting the "No" - which we concerned about
+#However, we see that the model with the normalised data is better at predicting the "No" - which we are concerned about
 #Hence, we choose the model which is trained on the normalised dataset
 write.csv(Pred_prob_new,"Results_new.csv")
